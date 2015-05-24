@@ -35,6 +35,9 @@ transmission_create_LDADD = \
     @LIBCURL_LIBS@ \
     @OPENSSL_LIBS@ \
     @ZLIB_LIBS@ \
-    @PTHREAD_LIBS@
+    @PTHREAD_LIBS@ \
+    @NANOMSG_LIBS@ \
+    @MSGPACK_LIBS@
+
 transmission_edit_LDADD = $(transmission_create_LDADD)
 transmission_show_LDADD = $(transmission_create_LDADD)

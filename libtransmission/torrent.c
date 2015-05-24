@@ -33,6 +33,7 @@
 #include "cache.h"
 #include "completion.h"
 #include "crypto.h" /* for tr_sha1 */
+#include "event-export-server.h"
 #include "resume.h"
 #include "fdlimit.h" /* tr_fdTorrentClose */
 #include "inout.h" /* tr_ioTestPiece () */
@@ -222,8 +223,15 @@ tr_torrentSetSpeedLimit_Bps (tr_torrent * tor, tr_direction dir, unsigned int Bp
   assert (tr_isTorrent (tor));
   assert (tr_isDirection (dir));
 
-  if (tr_bandwidthSetDesiredSpeed_Bps (&tor->bandwidth, dir, Bps))
+  if (tr_bandwidthSetDesiredSpeed_Bps (&tor->bandwidth, dir, Bps)) {
     tr_torrentSetDirty (tor);
+
+    if (dir == TR_DOWN) {
+      tr_eventExportServerSendDownloadLimit(tor, toSpeedKBps(Bps));
+    } else if (dir == TR_UP) {
+      tr_eventExportServerSendUploadLimit(tor, toSpeedKBps(Bps));
+    }
+  }
 }
 void
 tr_torrentSetSpeedLimit_KBps (tr_torrent * tor, tr_direction dir, unsigned int KBps)
@@ -254,8 +262,14 @@ tr_torrentUseSpeedLimit (tr_torrent * tor, tr_direction dir, bool do_use)
   assert (tr_isTorrent (tor));
   assert (tr_isDirection (dir));
 
-  if (tr_bandwidthSetLimited (&tor->bandwidth, dir, do_use))
+  if (tr_bandwidthSetLimited (&tor->bandwidth, dir, do_use)) {
     tr_torrentSetDirty (tor);
+    if (dir == TR_DOWN) {
+      tr_eventExportServerSendDownloadLimited(tor, do_use);
+    } else if (dir == TR_UP) {
+      tr_eventExportServerSendUploadLimited(tor, do_use);
+    }
+  }
 }
 
 bool
@@ -276,8 +290,10 @@ tr_torrentUseSessionLimits (tr_torrent * tor, bool doUse)
   changed = tr_bandwidthHonorParentLimits (&tor->bandwidth, TR_UP, doUse);
   changed |= tr_bandwidthHonorParentLimits (&tor->bandwidth, TR_DOWN, doUse);
 
-  if (changed)
+  if (changed) {
     tr_torrentSetDirty (tor);
+    tr_eventExportServerSendHonorsSessionLimits(tor, doUse);
+  }
 }
 
 bool
@@ -302,6 +318,8 @@ tr_torrentSetRatioMode (tr_torrent *  tor, tr_ratiolimit mode)
     {
       tor->ratioLimitMode = mode;
 
+      tr_eventExportServerSendSeedRatioMode(tor, tor->ratioLimitMode);
+
       tr_torrentSetDirty (tor);
     }
 }
@@ -322,6 +340,8 @@ tr_torrentSetRatioLimit (tr_torrent * tor, double desiredRatio)
   if ((int)(desiredRatio*100.0) != (int)(tor->desiredRatio*100.0))
     {
       tor->desiredRatio = desiredRatio;
+
+      tr_eventExportServerSendSeedRatioLimit(tor, tor->desiredRatio);
 
       tr_torrentSetDirty (tor);
     }
@@ -411,6 +431,8 @@ tr_torrentSetIdleMode (tr_torrent *  tor, tr_idlelimit mode)
     {
       tor->idleLimitMode = mode;
 
+      tr_eventExportServerSendSeedIdleMode(tor, tor->idleLimitMode);
+
       tr_torrentSetDirty (tor);
     }
 }
@@ -431,6 +453,8 @@ tr_torrentSetIdleLimit (tr_torrent * tor, uint16_t idleMinutes)
   if (idleMinutes > 0)
     {
       tor->idleLimitMinutes = idleMinutes;
+
+      tr_eventExportServerSendSeedIdleLimit(tor, tor->idleLimitMinutes);
 
       tr_torrentSetDirty (tor);
     }
@@ -529,9 +553,12 @@ tr_torrentSetLocalError (tr_torrent * tor, const char * fmt, ...)
 
   va_start (ap, fmt);
   tor->error = TR_STAT_LOCAL_ERROR;
+  tr_eventExportServerSendError(tor, tor->error);
   tor->errorTracker[0] = '\0';
   evutil_vsnprintf (tor->errorString, sizeof (tor->errorString), fmt, ap);
   va_end (ap);
+
+  tr_eventExportServerSendErrorString(tor, tor->errorString);
 
   tr_logAddTorErr (tor, "%s", tor->errorString);
 
@@ -543,8 +570,10 @@ static void
 tr_torrentClearError (tr_torrent * tor)
 {
   tor->error = TR_STAT_OK;
+  tr_eventExportServerSendError(tor, tor->error);
   tor->errorString[0] = '\0';
   tor->errorTracker[0] = '\0';
+  tr_eventExportServerSendErrorString(tor, tor->errorString);
 }
 
 static void
@@ -572,15 +601,19 @@ onTrackerResponse (tr_torrent * tor, const tr_tracker_event * event, void * unus
       case TR_TRACKER_WARNING:
         tr_logAddTorErr (tor, _("Tracker warning: \"%s\""), event->text);
         tor->error = TR_STAT_TRACKER_WARNING;
+        tr_eventExportServerSendError(tor, tor->error);
         tr_strlcpy (tor->errorTracker, event->tracker, sizeof (tor->errorTracker));
         tr_strlcpy (tor->errorString, event->text, sizeof (tor->errorString));
+        tr_eventExportServerSendErrorString(tor, tor->errorString);
         break;
 
       case TR_TRACKER_ERROR:
         tr_logAddTorErr (tor, _("Tracker error: \"%s\""), event->text);
         tor->error = TR_STAT_TRACKER_ERROR;
+        tr_eventExportServerSendError(tor, tor->error);
         tr_strlcpy (tor->errorTracker, event->tracker, sizeof (tor->errorTracker));
         tr_strlcpy (tor->errorString, event->text, sizeof (tor->errorString));
+        tr_eventExportServerSendErrorString(tor, tor->errorString);
         break;
 
       case TR_TRACKER_ERROR_CLEAR:
@@ -885,6 +918,7 @@ torrentInit (tr_torrent * tor, const tr_ctor * ctor)
   tor->bandwidth.priority = tr_ctorGetBandwidthPriority (ctor);
 
   tor->error = TR_STAT_OK;
+  tr_eventExportServerSendError(tor, tor->error);
 
   tor->finishedSeedingByIdle = false;
 
@@ -1085,6 +1119,8 @@ tr_torrentSetDownloadDir (tr_torrent * tor, const char * path)
       tr_free (tor->downloadDir);
       tor->downloadDir = tr_strdup (path);
       tr_torrentSetDirty (tor);
+
+      tr_eventExportServerSendDownloadDir(tor, tor->downloadDir);
     }
 
   refreshCurrentDir (tor);
@@ -2169,6 +2205,7 @@ tr_torrentRecheckCompleteness (tr_torrent * tor)
             {
               tr_announcerTorrentCompleted (tor);
               tor->doneDate = tor->anyDate = tr_time ();
+              tr_eventExportServerSendDoneDate(tor, tor->doneDate);
             }
 
           if (wasLeeching && wasRunning)
@@ -2403,6 +2440,8 @@ tr_torrentSetPriority (tr_torrent * tor, tr_priority_t priority)
       tor->bandwidth.priority = priority;
 
       tr_torrentSetDirty (tor);
+
+      tr_eventExportServerSendBandwidthPriority(tor, priority);
     }
 }
 
@@ -2421,6 +2460,8 @@ tr_torrentSetPeerLimit (tr_torrent * tor,
       tor->maxConnectedPeers = maxConnectedPeers;
 
       tr_torrentSetDirty (tor);
+
+      tr_eventExportServerSendMaxConnectedPeers(tor, tor->maxConnectedPeers);
     }
 }
 
@@ -2764,6 +2805,10 @@ tr_torrentSetActivityDate (tr_torrent * tor, time_t t)
 {
   assert (tr_isTorrent (tor));
 
+  if (tor->activityDate != t) {
+        tr_eventExportServerSendActivityDate(tor, t);
+  }
+
   tor->activityDate = t;
   tor->anyDate = MAX (tor->anyDate, tor->activityDate);
 }
@@ -2776,6 +2821,8 @@ tr_torrentSetDoneDate (tr_torrent * tor,
 
   tor->doneDate = t;
   tor->anyDate = MAX (tor->anyDate, tor->doneDate);
+
+  tr_eventExportServerSendDoneDate(tor, tor->doneDate);
 }
 
 /**
@@ -3260,6 +3307,9 @@ tr_torrentGotBlock (tr_torrent * tor, tr_block_index_t block)
               tor->corruptCur += n;
               tor->downloadedCur -= MIN (tor->downloadedCur, n);
               tr_peerMgrGotBadPiece (tor, p);
+
+              tr_eventExportServerSendCorruptEver(tor, tor->corruptCur + tor->corruptPrev);
+              tr_eventExportServerSendDownloadedEver(tor, tor->downloadedCur + tor->downloadedPrev);
             }
         }
     }
@@ -3267,6 +3317,7 @@ tr_torrentGotBlock (tr_torrent * tor, tr_block_index_t block)
     {
       const uint32_t n = tr_torBlockCountBytes (tor, block);
       tor->downloadedCur -= MIN (tor->downloadedCur, n);
+      tr_eventExportServerSendDownloadedEver(tor, tor->downloadedCur + tor->downloadedPrev);
       tr_logAddTorDbg (tor, "we have this block already...");
     }
 }
@@ -3485,6 +3536,10 @@ tr_torrentSetQueuePosition (tr_torrent * tor, int pos)
   tor->anyDate = now;
 
   assert (queueIsSequenced (tor->session));
+
+  if (tor->queuePosition != old_pos) {
+    tr_eventExportServerSendQueuePosition(tor, tor->queuePosition);
+  }
 }
 
 void

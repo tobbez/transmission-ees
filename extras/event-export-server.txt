@@ -1,0 +1,82 @@
+Event export server
+
+The event export server provides events to clients that connect to it using the
+nanomsg[0] pubsub protocol.
+
+Events are msgpacked[1] messages containing a map with the following keys:
+ * torrent: torrent info hash
+ * type: name of the field sent (see below)
+ * data: the data sent
+
+Most[2] field names match the ones from the RPC API.
+
+The feature can be enabled by setting event-export-server-enabled to true in
+settings.json. By default, it will listen on ipc:///tmp/transmission.ipc. You
+can specify an alternate bind address by setting event-export-server-bind-addr
+in settings.json.
+
+
+[0]: http://nanomsg.org/
+[1]: http://msgpack.org/
+[2]: All fields except trackerStat (trackerStats in the RPC API), which only
+     contains one tracker here, and only one of scrape/announce.
+
+
+The following events are sent:
+   
+   key                         | type                        | source 
+   ----------------------------+-----------------------------+---------
+   activityDate                | number                      | tr_stat
+   bandwidthPriority           | number                      | tr_priority_t
+   corruptEver                 | number                      | tr_stat
+   doneDate                    | number                      | tr_stat
+   downloadDir                 | string                      | tr_torrent
+   downloadedEver              | number                      | tr_stat
+   downloadLimit               | number                      | tr_torrent
+   downloadLimited             | boolean                     | tr_torrent
+   error                       | number                      | tr_stat
+   errorString                 | string                      | tr_stat
+   honorsSessionLimits         | boolean                     | tr_torrent
+   maxConnectedPeers           | number                      | tr_torrent
+   peersConnected              | number                      | tr_stat
+   peersGettingFromUs          | number                      | tr_stat
+   peersSendingToUs            | number                      | tr_stat
+   queuePosition               | number                      | tr_stat
+   secondsDownloading          | number                      | tr_stat
+   secondsSeeding              | number                      | tr_stat
+   seedIdleLimit               | number                      | tr_torrent
+   seedIdleMode                | number                      | tr_inactvelimit
+   seedRatioLimit              | double                      | tr_torrent
+   seedRatioMode               | number                      | tr_ratiolimit
+   trackerStat                 | array (see below)           | n/a
+   uploadedEver                | number                      | tr_stat
+   uploadLimit                 | number                      | tr_torrent
+   uploadLimited               | boolean                     | tr_torrent
+                               |                             |
+                               |                             |
+   -------------------+--------+-----------------------------+
+   trackerStat        | a map containing:                    |
+                      +-------------------------+------------+
+                    a | announce                | string     | tr_tracker_stat
+                    s | downloadCount           | number     | tr_tracker_stat
+                    b | host                    | string     | tr_tracker_stat
+                    b | id                      | number     | tr_tracker_stat
+                    a | lastAnnouncePeerCount   | number     | tr_tracker_stat
+                    a | lastAnnounceResult      | string     | tr_tracker_stat
+                    a | lastAnnounceSucceeded   | boolean    | tr_tracker_stat
+                    a | lastAnnounceTime        | number     | tr_tracker_stat
+                    a | lastAnnounceTimedOut    | boolean    | tr_tracker_stat
+                    s | lastScrapeResult        | string     | tr_tracker_stat
+                    s | lastScrapeSucceeded     | boolean    | tr_tracker_stat
+                    s | lastScrapeTime          | number     | tr_tracker_stat
+                    s | lastScrapeTimedOut      | boolean    | tr_tracker_stat
+                    s | leecherCount            | number     | tr_tracker_stat
+                    a | nextAnnounceTime        | number     | tr_tracker_stat
+                    s | nextScrapeTime          | number     | tr_tracker_stat
+                    s | scrape                  | string     | tr_tracker_stat
+                    s | seederCount             | number     | tr_tracker_stat
+                    b | tier                    | number     | tr_tracker_stat
+   -------------------+-------------------------+------------+
+    (a = announce,
+     s = scrape,
+     b = both)

@@ -110,6 +110,8 @@ static const struct tr_key_struct my_static[] =
   { "errorString", 11 },
   { "eta", 3 },
   { "etaIdle", 7 },
+  { "event-export-server-bind-addr", 29 },
+  { "event-export-server-enabled", 27 },
   { "failure reason", 14 },
   { "fields", 6 },
   { "fileStats", 9 },

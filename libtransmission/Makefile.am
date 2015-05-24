@@ -28,6 +28,7 @@ libtransmission_a_SOURCES = \
   completion.c \
   ConvertUTF.c \
   crypto.c \
+  event-export-server.c \
   fdlimit.c \
   handshake.c \
   history.c \
@@ -82,6 +83,7 @@ noinst_HEADERS = \
   ConvertUTF.h \
   crypto.h \
   completion.h \
+  event-export-server.h \
   fdlimit.h \
   handshake.h \
   history.h \
@@ -163,7 +165,9 @@ apps_ldadd = \
   @LIBEVENT_LIBS@ \
   @OPENSSL_LIBS@ \
   @PTHREAD_LIBS@ \
-  @ZLIB_LIBS@
+  @ZLIB_LIBS@ \
+  @NANOMSG_LIBS@ \
+  @MSGPACK_LIBS@
 
 TEST_SOURCES = libtransmission-test.c
 

@@ -31,6 +31,7 @@
 #include "blocklist.h"
 #include "cache.h"
 #include "crypto.h"
+#include "event-export-server.h" /* tr_eventExportServerInit */
 #include "fdlimit.h"
 #include "list.h"
 #include "log.h"
@@ -313,7 +314,7 @@ tr_sessionGetDefaultSettings (tr_variant * d)
 {
   assert (tr_variantIsDict (d));
 
-  tr_variantDictReserve (d, 63);
+  tr_variantDictReserve (d, 65);
   tr_variantDictAddBool (d, TR_KEY_blocklist_enabled,               false);
   tr_variantDictAddStr  (d, TR_KEY_blocklist_url,                   "http://www.example.com/blocklist");
   tr_variantDictAddInt  (d, TR_KEY_cache_size_mb,                   DEFAULT_CACHE_SIZE_MB);
@@ -377,6 +378,8 @@ tr_sessionGetDefaultSettings (tr_variant * d)
   tr_variantDictAddStr  (d, TR_KEY_bind_address_ipv6,               TR_DEFAULT_BIND_ADDRESS_IPV6);
   tr_variantDictAddBool (d, TR_KEY_start_added_torrents,            true);
   tr_variantDictAddBool (d, TR_KEY_trash_original_torrent_files,    false);
+  tr_variantDictAddBool (d, TR_KEY_event_export_server_enabled,     false);
+  tr_variantDictAddStr  (d, TR_KEY_event_export_server_bind_addr,   "ipc:///tmp/transmission.ipc");
 }
 
 void
@@ -384,7 +387,7 @@ tr_sessionGetSettings (tr_session * s, tr_variant * d)
 {
   assert (tr_variantIsDict (d));
 
-  tr_variantDictReserve (d, 63);
+  tr_variantDictReserve (d, 65);
   tr_variantDictAddBool (d, TR_KEY_blocklist_enabled,            tr_blocklistIsEnabled (s));
   tr_variantDictAddStr  (d, TR_KEY_blocklist_url,                tr_blocklistGetURL (s));
   tr_variantDictAddInt  (d, TR_KEY_cache_size_mb,                tr_sessionGetCacheLimit_MB (s));
@@ -449,6 +452,8 @@ tr_sessionGetSettings (tr_session * s, tr_variant * d)
   tr_variantDictAddStr  (d, TR_KEY_bind_address_ipv6,            tr_address_to_string (&s->public_ipv6->addr));
   tr_variantDictAddBool (d, TR_KEY_start_added_torrents,         !tr_sessionGetPaused (s));
   tr_variantDictAddBool (d, TR_KEY_trash_original_torrent_files, tr_sessionGetDeleteSource (s));
+  tr_variantDictAddBool (d, TR_KEY_event_export_server_enabled,  tr_eventExportServerGetEnabled ());
+  tr_variantDictAddStr  (d, TR_KEY_event_export_server_bind_addr, tr_eventExportServerGetBindAddr ());
 }
 
 bool
@@ -655,9 +660,15 @@ onNowTimer (evutil_socket_t foo UNUSED, short bar UNUSED, void * vsession)
       if (tor->isRunning)
         {
           if (tr_torrentIsSeed (tor))
-            ++tor->secondsSeeding;
+            {
+              ++tor->secondsSeeding;
+              tr_eventExportServerSendSecondsSeeding(tor, tor->secondsSeeding);
+            }
           else
-            ++tor->secondsDownloading;
+            {
+              ++tor->secondsDownloading;
+              tr_eventExportServerSendSecondsDownloading(tor, tor->secondsDownloading);
+            }
         }
     }
 
@@ -743,6 +754,9 @@ tr_sessionInitImpl (void * vdata)
 
   if (session->isLPDEnabled)
     tr_lpdInit (session, &session->public_ipv4->addr);
+
+  /* event export server */
+  tr_eventExportServerInit(&settings);
 
   /* cleanup */
   tr_variantFree (&settings);

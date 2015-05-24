@@ -25,6 +25,7 @@
 #include "clients.h"
 #include "completion.h"
 #include "crypto.h"
+#include "event-export-server.h"
 #include "handshake.h"
 #include "log.h"
 #include "net.h"
@@ -1715,6 +1716,8 @@ peerCallbackFunc (tr_peer * peer, const tr_peer_event * e, void * vs)
           tr_torrentSetDirty (tor);
           tr_statsAddUploaded (tor->session, e->length);
 
+          tr_eventExportServerSendUploadedEver(tor, tor->uploadedCur + tor->uploadedPrev);
+
           if (peer->atom != NULL)
             peer->atom->piece_data_time = now;
 
@@ -1731,6 +1734,8 @@ peerCallbackFunc (tr_peer * peer, const tr_peer_event * e, void * vs)
           tr_torrentSetDirty (tor);
 
           tr_statsAddDownloaded (tor->session, e->length);
+
+          tr_eventExportServerSendDownloadedEver(tor, tor->downloadedCur + tor->downloadedPrev);
 
           if (peer->atom != NULL)
             peer->atom->piece_data_time = now;
@@ -1933,6 +1938,8 @@ createBitTorrentPeer (tr_torrent       * tor,
   msgs = PEER_MSGS (peer);
   tr_peerMsgsUpdateActive (msgs, TR_UP);
   tr_peerMsgsUpdateActive (msgs, TR_DOWN);
+
+  tr_eventExportServerSendPeersConnected(tor, tor->swarm->stats.peerCount);
 }
 
 
@@ -2585,6 +2592,12 @@ tr_swarmIncrementActivePeers (tr_swarm * swarm, tr_direction direction, bool is_
   assert (n <= swarm->stats.peerCount);
 
   swarm->stats.activePeerCount[direction] = n;
+
+  if (direction == TR_UP) {
+    tr_eventExportServerSendPeersGettingFromUs(swarm->tor, swarm->stats.activePeerCount[direction]);
+  } else if (direction == TR_DOWN) {
+    tr_eventExportServerSendPeersSendingToUs(swarm->tor, swarm->stats.activePeerCount[direction]);
+  }
 }
 
 bool
@@ -3314,6 +3327,8 @@ removePeer (tr_swarm * s, tr_peer * peer)
 
   assert (s->stats.peerCount == tr_ptrArraySize (&s->peers));
   assert (s->stats.peerFromCount[atom->fromFirst] >= 0);
+
+  tr_eventExportServerSendPeersConnected(s->tor, s->stats.peerCount);
 
   tr_peerFree (peer);
 }

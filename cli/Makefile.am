@@ -27,5 +27,7 @@ transmission_cli_LDADD = \
     @OPENSSL_LIBS@ \
     @INTLLIBS@ \
     @ZLIB_LIBS@ \
-    @PTHREAD_LIBS@
+    @PTHREAD_LIBS@ \
+    @NANOMSG_LIBS@ \
+    @MSGPACK_LIBS@
 

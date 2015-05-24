@@ -22,6 +22,7 @@
 #include "announcer.h"
 #include "announcer-common.h"
 #include "crypto.h" /* tr_cryptoRandInt (), tr_cryptoWeakRandInt () */
+#include "event-export-server.h"
 #include "log.h"
 #include "peer-mgr.h" /* tr_peerMgrCompactToPex () */
 #include "ptrarray.h"
@@ -1181,6 +1182,35 @@ on_announce_done (const tr_announce_response  * response,
                 tier_announce_event_push (tier, TR_ANNOUNCE_EVENT_NONE, now + i);
             }
         }
+
+        tr_eventExportServerSendAnnounceDone(
+                        tier->tor,
+                        tier->currentTracker->announce,
+                        tier->currentTracker->key,
+                        tier->currentTracker->id,
+                        tier->lastAnnouncePeerCount,
+                        tier->lastAnnounceStr,
+                        tier->lastAnnounceSucceeded,
+                        tier->lastAnnounceTime,
+                        tier->lastAnnounceTimedOut,
+                        tier->announceAt,
+                        tier->key);
+        if (tier->lastScrapeTime == now) {
+          tr_eventExportServerSendScrapeDone(
+                          tier->tor,
+                          tier->currentTracker->downloadCount,
+                          tier->currentTracker->key,
+                          tier->currentTracker->id,
+                          tier->lastScrapeStr,
+                          tier->lastScrapeSucceeded,
+                          tier->lastScrapeTime,
+                          tier->lastScrapeTimedOut,
+                          tier->currentTracker->leecherCount,
+                          tier->scrapeAt,
+                          tier->currentTracker->scrape,
+                          tier->currentTracker->seederCount,
+                          tier->key);
+        }
     }
 
     tr_free (data);
@@ -1383,6 +1413,21 @@ on_scrape_done (const tr_scrape_response * response, void * vsession)
                         tracker->consecutiveFailures = 0;
                     }
                 }
+
+                tr_eventExportServerSendScrapeDone(
+                                tier->tor,
+                                tier->currentTracker->downloadCount,
+                                tier->currentTracker->key,
+                                tier->currentTracker->id,
+                                tier->lastScrapeStr,
+                                tier->lastScrapeSucceeded,
+                                tier->lastScrapeTime,
+                                tier->lastScrapeTimedOut,
+                                tier->currentTracker->leecherCount,
+                                tier->scrapeAt,
+                                tier->currentTracker->scrape,
+                                tier->currentTracker->seederCount,
+                                tier->key);
             }
         }
     }

@@ -34,7 +34,9 @@ LDADD = \
     @INTLLIBS@ \
     @SYSTEMD_DAEMON_LIBS@ \
     @ZLIB_LIBS@ \
-    @PTHREAD_LIBS@
+    @PTHREAD_LIBS@ \
+    @NANOMSG_LIBS@ \
+    @MSGPACK_LIBS@
 
 noinst_HEADERS = \
     watch.h
